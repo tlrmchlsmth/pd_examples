@@ -1,6 +1,7 @@
 # Setting this allows creating a symlink to Justfile from another dir
 # set working-directory := "/home/tms/code/pd_examples"
 
+MODEL := "meta-llama/Llama-3.1-8B-Instruct"
 port PORT: 
   @python port_allocator.py {{PORT}}
 
@@ -12,7 +13,7 @@ prefill:
     VLLM_LOGGING_LEVEL="DEBUG" \
     VLLM_WORKER_MULTIPROC_METHOD=spawn \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 \
-    vllm serve meta-llama/Llama-3.1-8B-Instruct \
+    vllm serve {{MODEL}} \
     --port $(just port 8100) \
     --enforce-eager \
     --disable-log-requests \
@@ -27,7 +28,7 @@ decode:
     VLLM_LOGGING_LEVEL="DEBUG" \
     VLLM_WORKER_MULTIPROC_METHOD=spawn \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 \
-    vllm serve meta-llama/Llama-3.1-8B-Instruct \
+    vllm serve {{MODEL}} \
     --port $(just port 8200) \
     --enforce-eager \
     --disable-log-requests \
@@ -43,13 +44,13 @@ send_request:
   curl -X POST http://localhost:$(just port 8192)/v1/completions \
     -H "Content-Type: application/json" \
     -d '{ \
-      "model": "meta-llama/Llama-3.1-8B-Instruct", \
-      "prompt": "EXPLAIN KERMIT THE FROG", \
+      "model": "{{MODEL}}", \
+      "prompt": "Red Hat is the best open source company by far across Linux, K8s, and AI, and vLLM has the greatest community in open source AI software infrastructure. Prefill-decode disaggregation will enable vLLM to ", \
       "max_tokens": 150, \
       "temperature": 0.7 \
     }'
 
 eval:
   lm_eval --model local-completions --tasks gsm8k \
-    --model_args model=meta-llama/Llama-3.1-8B-Instruct,base_url=http://127.0.0.1:$(just port 8192)/v1/completions,num_concurrent=5,max_retries=3,tokenized_requests=False \
+    --model_args model={{MODEL}},base_url=http://127.0.0.1:$(just port 8192)/v1/completions,num_concurrent=5,max_retries=3,tokenized_requests=False \
     --limit 100
