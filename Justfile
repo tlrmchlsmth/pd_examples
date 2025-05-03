@@ -1,4 +1,11 @@
+# Setting this allows creating a symlink to Justfile from another dir
+# set working-directory := "/home/tms/code/pd_examples"
+
+port PORT: 
+  @python port_allocator.py {{PORT}}
+
 prefill:
+    VLLM_NIXL_SIDE_CHANNEL_PORT=$(just port 5557) \
     UCX_LOG_LEVEL=debug \
     NIXL_ROLE="SENDER" \
     CUDA_VISIBLE_DEVICES=3 \
@@ -6,12 +13,14 @@ prefill:
     VLLM_WORKER_MULTIPROC_METHOD=spawn \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 \
     vllm serve meta-llama/Llama-3.1-8B-Instruct \
-    --port 8100 \
+    --port $(just port 8100) \
     --enforce-eager \
     --disable-log-requests \
     --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
 
 decode:
+    SKIP=1 \
+    VLLM_NIXL_SIDE_CHANNEL_PORT=$(just port 5557) \
     UCX_LOG_LEVEL=info \
     NIXL_ROLE="RECVER" \
     CUDA_VISIBLE_DEVICES=4 \
@@ -19,16 +28,19 @@ decode:
     VLLM_WORKER_MULTIPROC_METHOD=spawn \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 \
     vllm serve meta-llama/Llama-3.1-8B-Instruct \
-    --port 8200 \
+    --port $(just port 8200) \
     --enforce-eager \
     --disable-log-requests \
     --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
 
 proxy:
-    python disagg_proxy_server.py --port 8192
+    python disagg_proxy_server.py \
+      --port $(just port 8192) \
+      --prefiller-port $(just port 8100) \
+      --decoder-port $(just port 8200)
 
 send_request:
-  curl -X POST http://localhost:8192/v1/completions \
+  curl -X POST http://localhost:$(just port 8192)/v1/completions \
     -H "Content-Type: application/json" \
     -d '{ \
       "model": "meta-llama/Llama-3.1-8B-Instruct", \
@@ -39,5 +51,5 @@ send_request:
 
 eval:
   lm_eval --model local-completions --tasks gsm8k \
-    --model_args model=meta-llama/Llama-3.1-8B-Instruct,base_url=http://127.0.0.1:8192/v1/completions,num_concurrent=5,max_retries=3,tokenized_requests=False \
+    --model_args model=meta-llama/Llama-3.1-8B-Instruct,base_url=http://127.0.0.1:$(just port 8192)/v1/completions,num_concurrent=5,max_retries=3,tokenized_requests=False \
     --limit 100
