@@ -1,7 +1,11 @@
 # Setting this allows creating a symlink to Justfile from another dir
-# set working-directory := "/home/tms/code/pd_examples"
+set working-directory := "/home/tms/code/pd_examples/"
+
+# Needed for the proxy server
+vllm-directory := "/home/tms/vllm/" 
 
 MODEL := "meta-llama/Llama-3.1-8B-Instruct"
+
 port PORT: 
   @python port_allocator.py {{PORT}}
 
@@ -35,7 +39,7 @@ decode:
     --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
 
 proxy:
-    python disagg_proxy_server.py \
+    python "{{vllm-directory}}/tests/v1/kv_connector/toy_proxy_server.py" \
       --port $(just port 8192) \
       --prefiller-port $(just port 8100) \
       --decoder-port $(just port 8200)
