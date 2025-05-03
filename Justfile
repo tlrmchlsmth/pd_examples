@@ -36,3 +36,8 @@ send_request:
       "max_tokens": 150, \
       "temperature": 0.7 \
     }'
+
+eval:
+  lm_eval --model local-completions --tasks gsm8k \
+    --model_args model=meta-llama/Llama-3.1-8B-Instruct,base_url=http://127.0.0.1:8192/v1/completions,num_concurrent=5,max_retries=3,tokenized_requests=False \
+    --limit 100
