@@ -5,38 +5,65 @@ set working-directory := "/home/tms/code/pd_examples/"
 vllm-directory := "/home/tms/vllm/" 
 
 MODEL := "meta-llama/Llama-3.1-8B-Instruct"
+TP_SIZE := "1"
+PREFILL_GPUS := "3"
+DECODE_GPUS := "4"
+
+# MODEL := "deepseek-ai/DeepSeek-V2-Lite"
+# TP_SIZE := "2"
+# PREFILL_GPUS := "3,4"
+# DECODE_GPUS := "5,6"
+
+MEMORY_UTIL := "0.8"
 
 port PORT: 
   @python port_allocator.py {{PORT}}
 
+# For comparing against baseline vLLM
+vanilla_serve:
+    CUDA_VISIBLE_DEVICES={{PREFILL_GPUS}} \
+    VLLM_LOGGING_LEVEL="DEBUG" \
+    VLLM_WORKER_MULTIPROC_METHOD=spawn \
+    VLLM_ENABLE_V1_MULTIPROCESSING=0 \
+    vllm serve {{MODEL}} \
+      --port $(just port 8192) \
+      --enforce-eager \
+      --disable-log-requests \
+      --tensor-parallel-size {{TP_SIZE}} \
+      --gpu-memory-utilization {{MEMORY_UTIL}} \
+      --trust-remote-code
+
 prefill:
     VLLM_NIXL_SIDE_CHANNEL_PORT=$(just port 5557) \
     UCX_LOG_LEVEL=debug \
-    NIXL_ROLE="SENDER" \
-    CUDA_VISIBLE_DEVICES=3 \
+    CUDA_VISIBLE_DEVICES={{PREFILL_GPUS}} \
     VLLM_LOGGING_LEVEL="DEBUG" \
     VLLM_WORKER_MULTIPROC_METHOD=spawn \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 \
     vllm serve {{MODEL}} \
-    --port $(just port 8100) \
-    --enforce-eager \
-    --disable-log-requests \
-    --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+      --port $(just port 8100) \
+      --enforce-eager \
+      --disable-log-requests \
+      --tensor-parallel-size {{TP_SIZE}} \
+      --gpu-memory-utilization {{MEMORY_UTIL}} \
+      --trust-remote-code \
+      --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
 
 decode:
-    SKIP=1 \
-    VLLM_NIXL_SIDE_CHANNEL_PORT=$(just port 5557) \
+    VLLM_NIXL_SIDE_CHANNEL_PORT=$(just port 5558) \
     UCX_LOG_LEVEL=info \
-    NIXL_ROLE="RECVER" \
-    CUDA_VISIBLE_DEVICES=4 \
+    CUDA_VISIBLE_DEVICES={{DECODE_GPUS}} \
     VLLM_LOGGING_LEVEL="DEBUG" \
     VLLM_WORKER_MULTIPROC_METHOD=spawn \
     VLLM_ENABLE_V1_MULTIPROCESSING=0 \
     vllm serve {{MODEL}} \
-    --port $(just port 8200) \
-    --enforce-eager \
-    --disable-log-requests \
-    --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
+      --port $(just port 8200) \
+      --enforce-eager \
+      --disable-log-requests \
+      --tensor-parallel-size {{TP_SIZE}} \
+      --gpu-memory-utilization {{MEMORY_UTIL}} \
+      --trust-remote-code \
+      --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'
 
 proxy:
     python "{{vllm-directory}}/tests/v1/kv_connector/toy_proxy_server.py" \
